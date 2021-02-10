@@ -29,7 +29,7 @@ public class UdpServer {
             connectTwoPlayers();
             startNewGameRound();
             while (true) {
-
+                gameLoop();
             }
 
         } catch (Exception ex) {
@@ -41,7 +41,7 @@ public class UdpServer {
     }
 
     private void connectTwoPlayers() {
-        while (this.player1 == null || this.player2 == null) {
+        while (this.player1 == null) {
             System.out.println("UDP server is waiting for players");
             DatagramPacket receivedPacket = null;
             receivedPacket = receive();
@@ -54,7 +54,6 @@ public class UdpServer {
             } else if (receivedData.equalsIgnoreCase(ClientServerCommands.JOIN_GAME_REQUEST.toString())
                     && this.player2 == null
                     && !receivedPacket.getSocketAddress().equals(this.player1.getSocketAddress())) {
-
                 this.player2 = receivedPacket;
                 send("player2", receivedPacket.getAddress(), receivedPacket.getPort());
             } else {
@@ -75,14 +74,30 @@ public class UdpServer {
             if (receivedData.contains(ClientServerCommands.TANK_PLACED.toString())
                     && this.player1.getSocketAddress().equals(receivedPacket.getSocketAddress())) {
                 this.tank1Placed = true;
+                this.tank2Placed = true;
             } else if (receivedData.contains(ClientServerCommands.TANK_PLACED.toString())
                     && this.player2.getSocketAddress().equals(receivedPacket.getSocketAddress())) {
-                this.tank2Placed = true;
+
             }
             if (this.tank1Placed && this.tank2Placed) {
                 send(ClientServerCommands.START_ROUND.toString(), this.player1.getAddress(), this.player1.getPort());
-                send(ClientServerCommands.START_ROUND.toString(), this.player2.getAddress(), this.player2.getPort());
+                //send(ClientServerCommands.START_ROUND.toString(), this.player2.getAddress(), this.player2.getPort());
             }
+        }
+    }
+
+    private void gameLoop() {
+        DatagramPacket receivedPacket = null;
+        receivedPacket = receive();
+        String receivedData = packetToString(receivedPacket);
+        System.out.println("Client " + receivedPacket.getSocketAddress() + ": " + receivedData);
+        if (receivedData.contains(ClientServerCommands.TANK_POSITION.toString())
+                && this.player1.getSocketAddress().equals(receivedPacket.getSocketAddress())) {
+            send(receivedData, this.player1.getAddress(), this.player1.getPort());
+            System.out.println("Player1 position: " + receivedData);
+        } else if (receivedData.contains(ClientServerCommands.TANK_POSITION.toString())
+                && this.player2.getSocketAddress().equals(receivedPacket.getSocketAddress())) {
+            send(receivedData, this.player1.getAddress(), this.player1.getPort());
         }
     }
 
