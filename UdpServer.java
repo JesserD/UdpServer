@@ -25,7 +25,7 @@ public class UdpServer {
     public void service() {
         try {
             this.socket = new DatagramSocket(this.port);
-            System.out.println("UDP server running at port " + port);
+            System.out.println("UDP server running at port " + this.port);
             connectTwoPlayers();
             startNewGameRound();
             while (true) {
@@ -41,7 +41,7 @@ public class UdpServer {
     }
 
     private void connectTwoPlayers() {
-        while (this.player1 == null) {
+        while (this.player1 == null || this.player2 == null) {
             System.out.println("UDP server is waiting for players");
             DatagramPacket receivedPacket = null;
             receivedPacket = receive();
@@ -49,15 +49,19 @@ public class UdpServer {
             System.out.println("Client " + receivedPacket.getSocketAddress() + ": " + receivedData);
 
             if (receivedData.contains(ClientServerCommands.JOIN_GAME_REQUEST.toString()) && this.player1 == null) {
+
                 this.player1 = receivedPacket;
-                send("player1", receivedPacket.getAddress(), receivedPacket.getPort());
+                send("player1", receivedPacket);
+
             } else if (receivedData.equalsIgnoreCase(ClientServerCommands.JOIN_GAME_REQUEST.toString())
                     && this.player2 == null
                     && !receivedPacket.getSocketAddress().equals(this.player1.getSocketAddress())) {
+
                 this.player2 = receivedPacket;
-                send("player2", receivedPacket.getAddress(), receivedPacket.getPort());
+                send("player2", receivedPacket);
+
             } else {
-                send("fail", receivedPacket.getAddress(), receivedPacket.getPort());
+                send("fail", receivedPacket);
             }
         }
         this.isBusy = true;
@@ -74,14 +78,14 @@ public class UdpServer {
             if (receivedData.contains(ClientServerCommands.TANK_PLACED.toString())
                     && this.player1.getSocketAddress().equals(receivedPacket.getSocketAddress())) {
                 this.tank1Placed = true;
-                this.tank2Placed = true;
+
             } else if (receivedData.contains(ClientServerCommands.TANK_PLACED.toString())
                     && this.player2.getSocketAddress().equals(receivedPacket.getSocketAddress())) {
-
+                this.tank2Placed = true;
             }
             if (this.tank1Placed && this.tank2Placed) {
-                send(ClientServerCommands.START_ROUND.toString(), this.player1.getAddress(), this.player1.getPort());
-                //send(ClientServerCommands.START_ROUND.toString(), this.player2.getAddress(), this.player2.getPort());
+                send(ClientServerCommands.START_ROUND.toString(), this.player1);
+                send(ClientServerCommands.START_ROUND.toString(), this.player2);
             }
         }
     }
@@ -91,13 +95,21 @@ public class UdpServer {
         receivedPacket = receive();
         String receivedData = packetToString(receivedPacket);
         System.out.println("Client " + receivedPacket.getSocketAddress() + ": " + receivedData);
+
         if (receivedData.contains(ClientServerCommands.TANK_POSITION.toString())
                 && this.player1.getSocketAddress().equals(receivedPacket.getSocketAddress())) {
-            send(receivedData, this.player1.getAddress(), this.player1.getPort());
-            System.out.println("Player1 position: " + receivedData);
+            send(receivedData, this.player2);
         } else if (receivedData.contains(ClientServerCommands.TANK_POSITION.toString())
                 && this.player2.getSocketAddress().equals(receivedPacket.getSocketAddress())) {
-            send(receivedData, this.player1.getAddress(), this.player1.getPort());
+            send(receivedData, this.player1);
+        }
+
+        else if (receivedData.contains(ClientServerCommands.PROJECTILE_START_POSITION.toString())
+                && this.player1.getSocketAddress().equals(receivedPacket.getSocketAddress())) {
+            send(receivedData, this.player2);
+        } else if (receivedData.contains(ClientServerCommands.PROJECTILE_START_POSITION.toString())
+                && this.player2.getSocketAddress().equals(receivedPacket.getSocketAddress())) {
+            send(receivedData, this.player1);
         }
     }
 
@@ -114,8 +126,8 @@ public class UdpServer {
         return tempPacket;
     }
 
-    private void send(String msg, InetAddress clientAddress, int clientPort) {
-        DatagramPacket send = new DatagramPacket(msg.getBytes(), msg.length(), clientAddress, clientPort);
+    private void send(String msg, DatagramPacket client) {
+        DatagramPacket send = new DatagramPacket(msg.getBytes(), msg.length(), client.getAddress(), client.getPort());
         try {
             this.socket.send(send);
         } catch (Exception ex) {

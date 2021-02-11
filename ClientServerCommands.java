@@ -6,6 +6,7 @@ public enum ClientServerCommands {
     TANK_PLACED ("tank placed"),
     START_ROUND("start round"),
     TANK_POSITION("tank position "),
+    PROJECTILE_START_POSITION("projectileStartPosition"),
     SERVER_PORT("7878");
 
     private String msg;
