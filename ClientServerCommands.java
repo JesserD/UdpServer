@@ -5,8 +5,8 @@ public enum ClientServerCommands {
     JOIN_GAME_FAIL("fail"),
     TANK_PLACED ("tank placed"),
     START_ROUND("start round"),
-    TANK_POSITION("tank position "),
-    PROJECTILE_START_POSITION("projectileStartPosition"),
+    TANK_POSITION("tank_position"),
+    PROJECTILE_START_POSITION("projectile_start_position"),
     SERVER_PORT("7878");
 
     private String msg;

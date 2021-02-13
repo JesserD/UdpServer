@@ -5,8 +5,14 @@ import java.util.Scanner;
 public class UdpClient {
 
     public static void main(String[] args) {
-        UdpClient client = new UdpClient(7878, "192.168.0.101");
-        client.start();
+        try {
+            InetAddress ipAddress = InetAddress.getByName("tough-sheep-49.loca.lt");
+            UdpClient client = new UdpClient(7878, "92.35.97.211");
+            client.start();
+        } catch (UnknownHostException e) {
+            e.printStackTrace();
+        }
+
     }
 
     private int port;
@@ -76,5 +82,5 @@ public class UdpClient {
         String info = scanner.nextLine();
         return info;
     }
-    
+
 }

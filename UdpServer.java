@@ -28,6 +28,7 @@ public class UdpServer {
             System.out.println("UDP server running at port " + this.port);
             connectTwoPlayers();
             startNewGameRound();
+            System.out.println("Udp server is waiting for position");
             while (true) {
                 gameLoop();
             }
@@ -41,8 +42,8 @@ public class UdpServer {
     }
 
     private void connectTwoPlayers() {
+        System.out.println("UDP server is waiting for players");
         while (this.player1 == null || this.player2 == null) {
-            System.out.println("UDP server is waiting for players");
             DatagramPacket receivedPacket = null;
             receivedPacket = receive();
             String receivedData = packetToString(receivedPacket);
@@ -52,24 +53,26 @@ public class UdpServer {
 
                 this.player1 = receivedPacket;
                 send("player1", receivedPacket);
+                System.out.println("player1 is ready");
 
-            } else if (receivedData.equalsIgnoreCase(ClientServerCommands.JOIN_GAME_REQUEST.toString())
-                    && this.player2 == null
+            } else if (receivedData.contains(ClientServerCommands.JOIN_GAME_REQUEST.toString()) && this.player2 == null
                     && !receivedPacket.getSocketAddress().equals(this.player1.getSocketAddress())) {
 
                 this.player2 = receivedPacket;
                 send("player2", receivedPacket);
+                System.out.println("player2 is ready");
 
             } else {
                 send("fail", receivedPacket);
+                System.out.println("fail sent to " + receivedPacket.getSocketAddress());
             }
         }
         this.isBusy = true;
     }
 
     private void startNewGameRound() {
-        while (this.tank1Placed || this.tank2Placed) {
-            System.out.println("UDP server is waiting for the tanks to be placed");
+        System.out.println("UDP server is waiting for the tanks to be placed");
+        while (this.tank1Placed == false || this.tank2Placed == false) {
             DatagramPacket receivedPacket = null;
             receivedPacket = receive();
             String receivedData = packetToString(receivedPacket);
@@ -78,10 +81,12 @@ public class UdpServer {
             if (receivedData.contains(ClientServerCommands.TANK_PLACED.toString())
                     && this.player1.getSocketAddress().equals(receivedPacket.getSocketAddress())) {
                 this.tank1Placed = true;
+                System.out.println("tank1 placed");
 
             } else if (receivedData.contains(ClientServerCommands.TANK_PLACED.toString())
                     && this.player2.getSocketAddress().equals(receivedPacket.getSocketAddress())) {
                 this.tank2Placed = true;
+                System.out.println("tank2 placed");
             }
             if (this.tank1Placed && this.tank2Placed) {
                 send(ClientServerCommands.START_ROUND.toString(), this.player1);
@@ -96,20 +101,17 @@ public class UdpServer {
         String receivedData = packetToString(receivedPacket);
         System.out.println("Client " + receivedPacket.getSocketAddress() + ": " + receivedData);
 
-        if (receivedData.contains(ClientServerCommands.TANK_POSITION.toString())
-                && this.player1.getSocketAddress().equals(receivedPacket.getSocketAddress())) {
-            send(receivedData, this.player2);
-        } else if (receivedData.contains(ClientServerCommands.TANK_POSITION.toString())
-                && this.player2.getSocketAddress().equals(receivedPacket.getSocketAddress())) {
-            send(receivedData, this.player1);
-        }
+        boolean containsPosition = receivedData.contains(ClientServerCommands.TANK_POSITION.toString())
+                || receivedData.contains(ClientServerCommands.PROJECTILE_START_POSITION.toString());
 
-        else if (receivedData.contains(ClientServerCommands.PROJECTILE_START_POSITION.toString())
-                && this.player1.getSocketAddress().equals(receivedPacket.getSocketAddress())) {
+        if (containsPosition && this.player1.getSocketAddress().equals(receivedPacket.getSocketAddress())) {
             send(receivedData, this.player2);
-        } else if (receivedData.contains(ClientServerCommands.PROJECTILE_START_POSITION.toString())
-                && this.player2.getSocketAddress().equals(receivedPacket.getSocketAddress())) {
+            System.out.println("position sent");
+        } else if (containsPosition && this.player2.getSocketAddress().equals(receivedPacket.getSocketAddress())) {
             send(receivedData, this.player1);
+            System.out.println("position sent");
+        } else {
+            System.out.println("containsPosition " + containsPosition);
         }
     }
 
