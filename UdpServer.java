@@ -1,34 +1,41 @@
 
+import Model.GameRound;
+import Model.Projectile;
 import java.net.*;
+import java.util.List;
+import java.util.UUID;
 
-public class UdpServer {
+public class UdpServer extends Thread {
     private int port;
     private DatagramSocket socket;
     private final int timeout = 14 * 1000; // 7 seconds
     private boolean isBusy;
     private long lastResponseFromClient;
-    private DatagramPacket player1;
-    private DatagramPacket player2;
-    private boolean tank1Placed;
-    private boolean tank2Placed;
+    private GameRound gameRound;
 
-    public UdpServer() {
-        this.port = Integer.parseInt(ClientServerCommands.SERVER_PORT.toString());
+    public UdpServer(int port, String gameRoundId) {
+        this.port = port;
         this.isBusy = false;
         this.lastResponseFromClient = 0;
-        this.player1 = null;
-        this.player2 = null;
-        this.tank1Placed = false;
-        this.tank2Placed = false;
+        this.gameRound = new GameRound(gameRoundId);
     }
 
-    public void service() {
+    public GameRound getGameRound () {
+        return this.gameRound;
+    }
+
+    public int getPort () {
+        return this.port;
+    }
+
+    @Override
+    public void run(){
         try {
             this.socket = new DatagramSocket(this.port);
-            System.out.println("UDP server running at port " + this.port);
+            System.out.println("Sub UDP server is running at port " + this.port);
             connectTwoPlayers();
             startNewGameRound();
-            System.out.println("Udp server is waiting for position");
+            System.out.println("Sub Udp server is waiting for position");
             while (true) {
                 gameLoop();
             }
@@ -43,22 +50,24 @@ public class UdpServer {
 
     private void connectTwoPlayers() {
         System.out.println("UDP server is waiting for players");
-        while (this.player1 == null || this.player2 == null) {
+        while (this.gameRound.getPlayer1() == null || this.gameRound.getPlayer2() == null) {
             DatagramPacket receivedPacket = null;
             receivedPacket = receive();
             String receivedData = packetToString(receivedPacket);
-            System.out.println("Client " + receivedPacket.getSocketAddress() + ": " + receivedData);
+            System.out.println("(Sub server) Client " + receivedPacket.getSocketAddress() + ": " + receivedData);
 
-            if (receivedData.contains(ClientServerCommands.JOIN_GAME_REQUEST.toString()) && this.player1 == null) {
+            if (receivedData.contains(Commands.JOIN_GAME_REQUEST.toString())
+                    && this.gameRound.getPlayer1() == null) {
 
-                this.player1 = receivedPacket;
+                this.gameRound.setPlayer1(receivedPacket);
                 send("player1", receivedPacket);
                 System.out.println("player1 is ready");
 
-            } else if (receivedData.contains(ClientServerCommands.JOIN_GAME_REQUEST.toString()) && this.player2 == null
-                    && !receivedPacket.getSocketAddress().equals(this.player1.getSocketAddress())) {
+            } else if (receivedData.contains(Commands.JOIN_GAME_REQUEST.toString())
+                    && this.gameRound.getPlayer2() == null
+                    && !receivedPacket.getSocketAddress().equals(this.gameRound.getPlayer1().getSocketAddress())) {
 
-                this.player2 = receivedPacket;
+                this.gameRound.setPlayer2(receivedPacket);
                 send("player2", receivedPacket);
                 System.out.println("player2 is ready");
 
@@ -72,25 +81,25 @@ public class UdpServer {
 
     private void startNewGameRound() {
         System.out.println("UDP server is waiting for the tanks to be placed");
-        while (this.tank1Placed == false || this.tank2Placed == false) {
+        while (this.gameRound.getTank1().isPlaced() == false || this.gameRound.getTank2().isPlaced() == false) {
             DatagramPacket receivedPacket = null;
             receivedPacket = receive();
             String receivedData = packetToString(receivedPacket);
             System.out.println("Client " + receivedPacket.getSocketAddress() + ": " + receivedData);
 
-            if (receivedData.contains(ClientServerCommands.TANK_PLACED.toString())
-                    && this.player1.getSocketAddress().equals(receivedPacket.getSocketAddress())) {
-                this.tank1Placed = true;
+            if (receivedData.contains(Commands.TANK_PLACED.toString())
+                    && this.gameRound.getPlayer1().getSocketAddress().equals(receivedPacket.getSocketAddress())) {
+                this.gameRound.getTank1().setPlaced(true);
                 System.out.println("tank1 placed");
 
-            } else if (receivedData.contains(ClientServerCommands.TANK_PLACED.toString())
-                    && this.player2.getSocketAddress().equals(receivedPacket.getSocketAddress())) {
-                this.tank2Placed = true;
+            } else if (receivedData.contains(Commands.TANK_PLACED.toString())
+                    && this.gameRound.getPlayer2().getSocketAddress().equals(receivedPacket.getSocketAddress())) {
+                this.gameRound.getTank2().setPlaced(true);
                 System.out.println("tank2 placed");
             }
-            if (this.tank1Placed && this.tank2Placed) {
-                send(ClientServerCommands.START_ROUND.toString(), this.player1);
-                send(ClientServerCommands.START_ROUND.toString(), this.player2);
+            if (this.gameRound.getTank1().isPlaced() && this.gameRound.getTank2().isPlaced()) {
+                send(Commands.START_ROUND.toString(), this.gameRound.getPlayer1());
+                send(Commands.START_ROUND.toString(), this.gameRound.getPlayer2());
             }
         }
     }
@@ -101,18 +110,73 @@ public class UdpServer {
         String receivedData = packetToString(receivedPacket);
         System.out.println("Client " + receivedPacket.getSocketAddress() + ": " + receivedData);
 
-        boolean containsPosition = receivedData.contains(ClientServerCommands.TANK_POSITION.toString())
-                || receivedData.contains(ClientServerCommands.PROJECTILE_START_POSITION.toString());
+        boolean containsPosition = receivedData.contains(Commands.TANK_POSITION.toString())
+                || receivedData.contains(Commands.PROJECTILE_START_POSITION.toString());
 
-        if (containsPosition && this.player1.getSocketAddress().equals(receivedPacket.getSocketAddress())) {
-            send(receivedData, this.player2);
+        if (containsPosition && this.gameRound.player1.getSocketAddress().equals(receivedPacket.getSocketAddress())) {
+            send(receivedData, this.gameRound.player2);
             System.out.println("position sent");
-        } else if (containsPosition && this.player2.getSocketAddress().equals(receivedPacket.getSocketAddress())) {
-            send(receivedData, this.player1);
+        } else if (containsPosition
+                && this.gameRound.player2.getSocketAddress().equals(receivedPacket.getSocketAddress())) {
+            send(receivedData, this.gameRound.player1);
             System.out.println("position sent");
         } else {
-            System.out.println("containsPosition " + containsPosition);
         }
+
+        boolean containsProjStartPos = receivedData.contains(Commands.PROJECTILE_START_POSITION.toString());
+
+        if (containsProjStartPos
+                && this.gameRound.player1.getSocketAddress().equals(receivedPacket.getSocketAddress())) {
+            this.gameRound.tank1.getProjectiles().add(createNewProjectileObject(receivedData));
+            send(receivedData, this.gameRound.player2);
+            System.out.println("projectile start position sent to player2");
+        } else if (containsProjStartPos
+                && this.gameRound.player2.getSocketAddress().equals(receivedPacket.getSocketAddress())) {
+            this.gameRound.tank2.getProjectiles().add(createNewProjectileObject(receivedData));
+            send(receivedData, this.gameRound.player1);
+            System.out.println("projectile start position sent to player1");
+        } else {
+        }
+
+        boolean containsHit = receivedData.contains(Commands.PROJECTILE_HIT_OPPONENT.toString());
+
+        if (containsHit && listContainsProjectile(this.gameRound.tank1.getProjectiles(), receivedData.split(" ")[1])) {
+            this.gameRound.tank2.setHealth(this.gameRound.tank2.getHealth()-25);
+            String responseToPlayer1 = Commands.HP_UPDATE.toString() + " " + this.gameRound.tank2.getHealth() + " opponent";
+            String responseToPlayer2 = Commands.HP_UPDATE.toString() + " " + this.gameRound.tank2.getHealth() + " client";
+            send(responseToPlayer1, this.gameRound.player1);
+            send(responseToPlayer2, this.gameRound.player2);
+        } else if (containsHit && listContainsProjectile(this.gameRound.tank2.getProjectiles(), receivedData.split(" ")[1])) {
+            this.gameRound.tank1.setHealth(this.gameRound.tank1.getHealth()-25);
+            String responseToPlayer2 = Commands.HP_UPDATE.toString() + " " + this.gameRound.tank1.getHealth() + " opponent";
+            String responseToPlayer1 = Commands.HP_UPDATE.toString() + " " + this.gameRound.tank1.getHealth() + " client";
+            send(responseToPlayer2, this.gameRound.player2);
+            send(responseToPlayer1, this.gameRound.player1); 
+        } else if (containsHit) {
+            boolean firstCondition = listContainsProjectile(this.gameRound.tank2.getProjectiles(), receivedData.split(" ")[1]);
+            boolean secondCondition = listContainsProjectile(this.gameRound.tank1.getProjectiles(), receivedData.split(" ")[1]);
+            System.out.println("firstCondition " + firstCondition);
+            System.out.println("secondCondition " + secondCondition);
+        }
+    }
+
+    private boolean listContainsProjectile (List<Projectile> list, String Id) {
+        for (Projectile projectile : list) {
+            System.out.println(projectile.getId());
+            if (projectile.getId().equals(Id) || projectile.getId().contains(Id)){
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private Projectile createNewProjectileObject(String receivedData) {
+        float directionAngle = Float.parseFloat(receivedData.split(" ")[1]);
+        float x = Float.parseFloat(receivedData.split(" ")[2]);
+        float y = Float.parseFloat(receivedData.split(" ")[3]);
+        float z = Float.parseFloat(receivedData.split(" ")[4]);
+        String ProjId = receivedData.split(" ")[5];
+        return new Projectile(directionAngle, x, y, z, ProjId);
     }
 
     private DatagramPacket receive() {
